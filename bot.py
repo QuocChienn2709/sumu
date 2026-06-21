@@ -775,5 +775,36 @@ def main():
     print(f"🔑 Token: {TOKEN[:10]}...")
     application.run_polling(allowed_updates=Update.ALL_TYPES)
 
+# Thêm vào cuối file bot.py, trước if __name__ == "__main__":
+
+from flask import Flask
+import threading
+
+app = Flask(__name__)
+
+@app.route('/')
+def health():
+    return "Bot is running!"
+
+def run_web():
+    app.run(host='0.0.0.0', port=int(os.getenv('PORT', 10000)))
+
+# Sửa hàm main:
+def main():
+    # Chạy bot trong thread riêng
+    bot_thread = threading.Thread(target=run_bot)
+    bot_thread.daemon = True
+    bot_thread.start()
+    
+    # Chạy web server để giữ port mở
+    run_web()
+
+def run_bot():
+    application = Application.builder().token(TOKEN).build()
+    application.add_handler(CommandHandler("start", start))
+    application.add_handler(CallbackQueryHandler(button_handler))
+    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
+    application.run_polling(allowed_updates=Update.ALL_TYPES)
+
 if __name__ == "__main__":
     main()
