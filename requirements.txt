@@ -4,3 +4,4 @@ pystyle
 beautifulsoup4
 python-dotenv
 urllib3
+flask
