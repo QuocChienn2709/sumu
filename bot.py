@@ -15,7 +15,8 @@ import urllib3
 from telegram import Update
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
 import logging
-
+from flask import Flask
+import threading
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 # ====== CẤU HÌNH ======
@@ -1909,7 +1910,22 @@ async def spam_all_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def unknown(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("❌ Lệnh không hợp lệ!\nSử dụng /help để xem hướng dẫn.")
 
+# Thêm vào sau phần import
+
+app = Flask(__name__)
+
+@app.route('/')
+def home():
+    return "Bot is running!"
+
+def run_flask():
+    app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 10000)))
+
+# Sửa hàm main() thành:
 def main():
+    # Chạy Flask trong thread riêng
+    threading.Thread(target=run_flask, daemon=True).start()
+    
     print("🚀 Bot đang khởi động...")
     application = Application.builder().token(TOKEN).build()
     application.add_handler(CommandHandler("start", start))
@@ -1921,6 +1937,5 @@ def main():
     application.add_handler(MessageHandler(filters.COMMAND, unknown))
     print("✅ Bot đang chạy...")
     application.run_polling(allowed_updates=Update.ALL_TYPES)
-
 if __name__ == "__main__":
     main()
