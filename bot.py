@@ -1,5 +1,5 @@
-# bot.py - Telegram Bot spam SMS/CALL - Public version
-# Yêu cầu: Python 3.9+, thư viện: python-telegram-bot==20.7, requests, pystyle, bs4
+# bot.py - Telegram Bot spam SMS/CALL - Public version with Flask health check
+# Yêu cầu: Python 3.9+, thư viện: python-telegram-bot==20.7, requests, pystyle, bs4, flask
 
 import os
 import re
@@ -15,6 +15,10 @@ import urllib3
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, ContextTypes, MessageHandler, filters
 from dotenv import load_dotenv
+from flask import Flask
+import threading
+import asyncio
+import sys
 
 # Tắt cảnh báo SSL
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
@@ -23,7 +27,7 @@ load_dotenv()
 # === CẤU HÌNH BOT ===
 TOKEN = os.getenv("BOT_TOKEN", "YOUR_BOT_TOKEN_HERE")
 MAX_THREADS = 10000000
-threading = ThreadPoolExecutor(max_workers=MAX_THREADS)
+threading_pool = ThreadPoolExecutor(max_workers=MAX_THREADS)
 
 # Biến toàn cục
 thanhcong = 0
@@ -45,7 +49,7 @@ def Random_string(length, minh=None):
 def random_string(length):
     return ''.join(random.choice(string.ascii_lowercase) for _ in range(length))
 
-# === HÀM SPAM SMS (GIỮ NGUYÊN) ===
+# === HÀM SPAM SMS ===
 def sms0(phone):
     global thanhcong
     cookies = {'csrftoken': 'jxZ3X9GCAyb74yxGzBAEtd8Ke1TAXESU9qpypmmi6jAkrNC2lOo3vepbv5q29aU7', 'tel': phone}
@@ -615,7 +619,6 @@ async def spam_attack_async(phone, user_id, context):
     thatbai = 0
     running = True
     
-    # Khởi tạo session cho user
     if user_id not in user_sessions:
         user_sessions[user_id] = {'running': False, 'thanhcong': 0, 'thatbai': 0}
     
@@ -628,7 +631,6 @@ async def spam_attack_async(phone, user_id, context):
         if not user_sessions[user_id]['running']:
             break
         
-        # SMS functions
         sms_funcs = [
             sms0, sms1, sms2, sms3, sms4, sms5, sms7, sms8, sms9, sms10,
             sms11, sms12, sms13, sms14, sms15, sms17, sms18, sms19, sms20,
@@ -652,7 +654,6 @@ async def spam_attack_async(phone, user_id, context):
         if not user_sessions[user_id]['running']:
             break
             
-        # Call functions
         call_funcs = [call2, call3, call4, call5, call6]
         for func in call_funcs:
             if not user_sessions[user_id]['running']:
@@ -728,7 +729,6 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     if context.user_data.get('awaiting_phone', False):
         phone = update.message.text.strip()
-        # Validate phone
         if not re.search(r"^(0?)(3[2-9]|5[6|8|9]|7[0|6-9]|8[0-6|8|9]|9[0-4|6-9])[0-9]{7}$", phone):
             await update.message.reply_text("❌ Số điện thoại không hợp lệ. Vui lòng nhập lại (VD: 0987654321):")
             return
@@ -742,10 +742,8 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "⏹️ Dùng nút Dừng để kết thúc."
         )
         
-        # Chạy spam trong background
         try:
             success, fail = await spam_attack_async(phone, user_id, context)
-            
             await update.message.reply_text(
                 f"✅ *Hoàn thành spam*\n"
                 f"─" * 20 + "\n"
@@ -758,52 +756,37 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         except Exception as e:
             await update.message.reply_text(f"❌ Lỗi: {str(e)}")
 
-# === MAIN ===
-import asyncio
-
-def main():
-    # Tạo app
-    application = Application.builder().token(TOKEN).build()
-    
-    # Handlers
-    application.add_handler(CommandHandler("start", start))
-    application.add_handler(CallbackQueryHandler(button_handler))
-    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
-    
-    # Chạy bot
-    print("🤖 Bot đang chạy... (Public - Ai cũng dùng được)")
-    print(f"🔑 Token: {TOKEN[:10]}...")
-    application.run_polling(allowed_updates=Update.ALL_TYPES)
-
-# Thêm vào cuối file bot.py, trước if __name__ == "__main__":
-
-from flask import Flask
-import threading
-
+# === FLASK WEB SERVER (CHO RENDER HEALTH CHECK) ===
 app = Flask(__name__)
 
 @app.route('/')
 def health():
-    return "Bot is running!"
+    return "Bot is running!", 200
 
-def run_web():
-    app.run(host='0.0.0.0', port=int(os.getenv('PORT', 10000)))
+@app.route('/health')
+def health_check():
+    return {"status": "ok", "sessions": len(user_sessions)}, 200
 
-# Sửa hàm main:
+def run_flask():
+    port = int(os.getenv('PORT', 10000))
+    app.run(host='0.0.0.0', port=port, debug=False, use_reloader=False)
+
+# === MAIN ===
 def main():
-    # Chạy bot trong thread riêng
-    bot_thread = threading.Thread(target=run_bot)
-    bot_thread.daemon = True
-    bot_thread.start()
+    # Chạy Flask trong thread con
+    flask_thread = threading.Thread(target=run_flask, daemon=True)
+    flask_thread.start()
     
-    # Chạy web server để giữ port mở
-    run_web()
-
-def run_bot():
+    print("🤖 Bot đang chạy... (Public - Ai cũng dùng được)")
+    print(f"🔑 Token: {TOKEN[:10]}...")
+    print(f"🌐 Web server running on port {os.getenv('PORT', 10000)}")
+    
+    # Chạy bot ở main thread
     application = Application.builder().token(TOKEN).build()
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CallbackQueryHandler(button_handler))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
+    
     application.run_polling(allowed_updates=Update.ALL_TYPES)
 
 if __name__ == "__main__":
