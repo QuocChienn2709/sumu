@@ -1948,14 +1948,22 @@ async def run_bot():
     print("✅ Bot đang chạy...")
     await application.run_polling(allowed_updates=Update.ALL_TYPES, drop_pending_updates=True)
 
+# ====== MAIN ======
 def main():
-    # Chạy Flask trong thread riêng để giữ cổng mở
+    # Chạy Flask trong thread riêng
     flask_thread = threading.Thread(target=run_flask, daemon=True)
     flask_thread.start()
     print("✅ Flask server đã khởi động")
     
-    # Chạy bot
-    asyncio.run(run_bot())
+    # Chạy bot - SỬA CÁCH GỌI ASYNCIO
+    try:
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        loop.run_until_complete(run_bot())
+    except KeyboardInterrupt:
+        print("🛑 Bot đã dừng")
+    finally:
+        loop.close()
 
 if __name__ == "__main__":
     main()
