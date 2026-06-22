@@ -1910,24 +1910,16 @@ async def spam_all_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def unknown(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("❌ Lệnh không hợp lệ!\nSử dụng /help để xem hướng dẫn.")
 
-# Thêm vào sau phần import
-
-app = Flask(__name__)
-
-@app.route('/')
-def home():
-    return "Bot is running!"
-
-def run_flask():
-    app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 10000)))
-
-# Sửa hàm main() thành:
-def main():
-    # Chạy Flask trong thread riêng
-    threading.Thread(target=run_flask, daemon=True).start()
-    
+# ====== MAIN ======
+async def run_bot():
     print("🚀 Bot đang khởi động...")
+    
     application = Application.builder().token(TOKEN).build()
+    
+    # Xóa webhook để tránh conflict
+    await application.bot.delete_webwork()
+    print("✅ Webhook đã được xóa")
+    
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("help", help_command))
     application.add_handler(CommandHandler("status", status_command))
@@ -1935,7 +1927,18 @@ def main():
     application.add_handler(CommandHandler("spam_call", spam_call_command))
     application.add_handler(CommandHandler("spam_all", spam_all_command))
     application.add_handler(MessageHandler(filters.COMMAND, unknown))
+    
     print("✅ Bot đang chạy...")
-    application.run_polling(allowed_updates=Update.ALL_TYPES)
+    await application.run_polling(allowed_updates=Update.ALL_TYPES, drop_pending_updates=True)
+
+def main():
+    # Chạy Flask trong thread riêng để giữ cổng mở
+    flask_thread = threading.Thread(target=run_flask, daemon=True)
+    flask_thread.start()
+    print("✅ Flask server đã khởi động")
+    
+    # Chạy bot
+    asyncio.run(run_bot())
+
 if __name__ == "__main__":
     main()
