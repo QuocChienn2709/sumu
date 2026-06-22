@@ -1,8 +1,5 @@
-python-telegram-bot
+telebot
+Flask
 requests
-pystyle
-beautifulsoup4
-python-dotenv
+bs4
 urllib3
-flask
-gunicorn
