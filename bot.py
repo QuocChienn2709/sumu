@@ -8,6 +8,7 @@ import random
 import string
 import hashlib
 import urllib.parse
+import asyncio  # <--- THÊM VÀO ĐÂY
 import requests
 from bs4 import BeautifulSoup
 from concurrent.futures import ThreadPoolExecutor
@@ -17,6 +18,7 @@ from telegram.ext import Application, CommandHandler, MessageHandler, filters, C
 import logging
 from flask import Flask
 import threading
+
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 # ====== CẤU HÌNH ======
