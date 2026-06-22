@@ -1933,28 +1933,7 @@ async def run_bot():
     
     application = Application.builder().token(TOKEN).build()
     
-    # Xóa webhook để tránh conflict - SỬA LỖI CHÍNH TẢ
-    await application.bot.delete_webhook()
-    print("✅ Webhook đã được xóa")
-    
-    application.add_handler(CommandHandler("start", start))
-    application.add_handler(CommandHandler("help", help_command))
-    application.add_handler(CommandHandler("status", status_command))
-    application.add_handler(CommandHandler("spam_sms", spam_sms_command))
-    application.add_handler(CommandHandler("spam_call", spam_call_command))
-    application.add_handler(CommandHandler("spam_all", spam_all_command))
-    application.add_handler(MessageHandler(filters.COMMAND, unknown))
-    
-    print("✅ Bot đang chạy...")
-    await application.run_polling(allowed_updates=Update.ALL_TYPES, drop_pending_updates=True)
-
-# ====== MAIN ======
-async def run_bot():
-    print("🚀 Bot đang khởi động...")
-    
-    application = Application.builder().token(TOKEN).build()
-    
-    # Xóa webhook để tránh conflict
+    # Xóa webhook
     await application.bot.delete_webhook()
     print("✅ Webhook đã được xóa")
     
@@ -1970,7 +1949,20 @@ async def run_bot():
     await application.run_polling(allowed_updates=Update.ALL_TYPES, drop_pending_updates=True)
 
 def main():
-    asyncio.run(run_bot())
+    # Chạy Flask trong thread riêng
+    flask_thread = threading.Thread(target=run_flask, daemon=True)
+    flask_thread.start()
+    print("✅ Flask server đã khởi động")
+    
+    # Lấy event loop hiện tại thay vì tạo mới
+    try:
+        loop = asyncio.get_event_loop()
+        loop.run_until_complete(run_bot())
+    except RuntimeError:
+        # Nếu loop đang chạy, tạo loop mới
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        loop.run_until_complete(run_bot())
 
 if __name__ == "__main__":
     main()
