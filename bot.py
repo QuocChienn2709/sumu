@@ -1910,14 +1910,29 @@ async def spam_all_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def unknown(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("❌ Lệnh không hợp lệ!\nSử dụng /help để xem hướng dẫn.")
 
+# ====== FLASK APP ======
+app = Flask(__name__)
+
+@app.route('/')
+def home():
+    return "Bot is running!"
+
+@app.route('/health')
+def health():
+    return "OK"
+
+def run_flask():
+    port = int(os.environ.get('PORT', 10000))
+    app.run(host='0.0.0.0', port=port, debug=False)
+
 # ====== MAIN ======
 async def run_bot():
     print("🚀 Bot đang khởi động...")
     
     application = Application.builder().token(TOKEN).build()
     
-    # Xóa webhook để tránh conflict
-    await application.bot.delete_webwork()
+    # Xóa webhook để tránh conflict - SỬA LỖI CHÍNH TẢ
+    await application.bot.delete_webhook()
     print("✅ Webhook đã được xóa")
     
     application.add_handler(CommandHandler("start", start))
